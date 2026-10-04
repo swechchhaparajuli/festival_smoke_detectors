@@ -1,5 +1,5 @@
 # HEAT AND SMOKE EXPOSURE AT MAJOR U.S. OUTDOOR MUSIC FESTIVALS
-Add a brief description of your project, in a sentence or two.
+We're looking at heat and smoke exposure levels at outdoor music festivals held annually at around the same time in the U.S. We want to see which festivals are in the riskiest areas, and if that risk has been rising over the past few decades.
 
 ## Team Members
 
@@ -86,6 +86,8 @@ Make sure it writes the data in the bucket.
 ├────── noaa_collector.py
 ├────── epa_collector.py
 ├────── wikipedia_scraper.py
+├──── transform.py 
+├──── storage.py 
 ├── streamlit/
 ├──── DOCKERFILE
 ├──── requirements.txt
