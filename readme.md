@@ -1,4 +1,4 @@
-# ADD YOUR PROJECT TITLE
+# HEAT AND SMOKE EXPOSURE AT MAJOR U.S. OUTDOOR MUSIC FESTIVALS
 Add a brief description of your project, in a sentence or two.
 
 ## Team Members
@@ -75,9 +75,20 @@ Make sure it writes the data in the bucket.
 ## Repository Structure
 ```
 .
-├── fastapi
-
+├── fastapi/
+├──── DOCKERFILE
+├──── requirements.txt
+├──── api.py
+├──── collectors/
+├────── noaa_collector.py
+├────── epa_collector.py
+├────── wikipedia_scraper.py
+├── streamlit/
+├──── DOCKERFILE
+├──── requirements.txt
+├──── app.py
+├── gcloud_command.sh
 ├── .env
-├── 
+├── LICENSE
 └── README.md
 ```
