@@ -12,8 +12,11 @@ Add a brief description of your project, in a sentence or two.
 ---
 
 ## Problem Statement
-- Follow the direction given in the 1st assignment
 
+We want to explore heat and smoke exposure at major U.S. music festivals to assess the riskiness of the locations where outdoor festivals are regularly held. We combine an inventory of major U.S. music festivals scraped from Wikipedia (including name, city, and recurring annual date) with NOAA NCEI daily weather summaries via API and EPA AirData daily PM2.5 concentration files to make a heat-smoke exposure profile for each festival's location and time of year. Because each festival recurs at roughly the same week each year, they can be associated with a specific location-date combo, which we can use to ask:
+
+1. which combos historically have the riskiest weather conditions and
+2. whether the conditions have shifted in the last 30 years.
 
 ---
 
