@@ -5,11 +5,10 @@ Add a brief description of your project, in a sentence or two.
 
 | Name | GitHubID | Role / Focus |
 | --- | --- | --- |
-| FULL NAME | id | e.g. Streamlit app - map |
-| FULL NAME | id | e.g. scraping for SF news data  + scheduled collection |
-| FULL NAME | id | e.g. API call for SF crimedata + data cleaning |
-| FULL NAME | id | e.g. Streamlit app - interactive bargraph|
-| FULL NAME | id | e.g. API call weather data +  scheduled collection|
+| Maaz Ullah Arshad | maazarshad | EPA collector + transform.py |
+| Swechchha Parajuli | swechchhaparajuli | Github setup, Wikipedia scraper + streamlit app |
+| Erin Lukow | erinnalani | README content, contract finalization, NOAA + storage.py |
+| Zhengyang Dong  | mechanic2718 | GCP Setup, Dockerfiles + gcloud_command.sh + Cloud Run & Cloud Scheduler setup|
 ---
 
 ## Problem Statement
@@ -28,7 +27,7 @@ Add a brief description of your project, in a sentence or two.
 | 2 | [NAME](https://exact-url) | File | ... | ... | none |
 | 3 | [NAME](https://exact-url) | Scraped | ... | ... | `robots.txt` checked DATE |
 
-Note: If we need a key, say which environment variable holds it and make sure that variable also appears in the .env_template
+Note: If we need a key, say which environment variable holds it and make sure that variable also appears in the .env
 
 ### Integration Goal
 - Follow the direction given in the 1st assignment
@@ -76,7 +75,9 @@ Make sure it writes the data in the bucket.
 ## Repository Structure
 ```
 .
-├── your_code.py
-├── .env_template
+├── fastapi
+
+├── .env
+├── 
 └── README.md
 ```
