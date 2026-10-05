@@ -5,18 +5,23 @@ We're looking at heat and smoke exposure levels at outdoor music festivals held 
 
 | Name | GitHubID | Role / Focus |
 | --- | --- | --- |
-| SWECHCHHA PARAJULI| swechchhaparajuli | Wikipedia scraper + festival data cleaning + Streamlit app|
-| MAAZ ARSHAD | maazarshad | EPA data collector  + EPA data cleaning|
+| Maaz Ullah Arshad | maazarshad | EPA data collector  + EPA data cleaning |
+| Swechchha Parajuli | swechchhaparajuli | Github setup, Wikipedia scraper + streamlit app |
 | ZHENGYANG DONG | id | storage.py + Cloud deployment |
 | ERIN LUKOW | erinnalani | NOAA data collector + NOAA data cleaning |
 ---
 
 ## Problem Statement
-We want to explore heat and smoke exposure at major U.S. music festivals to assess the riskiness of the locations where outdoor festivals are regularly held. We combine an inventory of major U.S. music festivals scraped from Wikipedia (including name, city, and recurring annual date) with NOAA NCEI daily weather summaries via API and EPA AirData daily PM2.5 concentration files to make a heat-smoke exposure profile for each festival's location and time of year. Because each festival recurs at roughly the same week each year, they can be associated with a specific location-date combo, which we can use to ask: 1. which combos historically have the riskiest weather conditions and 2. whether the conditions have shifted in the last 30 years.
+
+We want to explore heat and smoke exposure at major U.S. music festivals to assess the riskiness of the locations where outdoor festivals are regularly held. We combine an inventory of major U.S. music festivals scraped from Wikipedia (including name, city, and recurring annual date) with NOAA NCEI daily weather summaries via API and EPA AirData daily PM2.5 concentration files to make a heat-smoke exposure profile for each festival's location and time of year. Because each festival recurs at roughly the same week each year, they can be associated with a specific location-date combo, which we can use to ask:
+
+1. which combos historically have the riskiest weather conditions and
+2. whether the conditions have shifted in the last 30 years.
+
 ---
 
 ## Data Sources and Integration Goal
-
+- Follow the direction given in the 1st assignment
 
 ### Sources
 | # | Source & Link | Method | What it contains | Update frequency | Access requirements |
@@ -74,7 +79,24 @@ Make sure it writes the data in the bucket.
 ## Repository Structure
 ```
 .
-├── your_code.py
-├── .env_template
+├── fastapi/
+├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
+├──── requirements.txt
+├──── api.py
+├──── collectors/
+├────── noaa_collector.py
+├────── epa_collector.py
+├────── wikipedia_scraper.py
+├──── transform.py 
+├──── storage.py 
+├── streamlit/
+├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
+├──── requirements.txt
+├──── app.py
+├── gcloud_command.sh
+├── .env
+├── LICENSE
 └── README.md
 ```
