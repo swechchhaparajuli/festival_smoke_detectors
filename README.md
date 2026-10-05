@@ -5,10 +5,10 @@ We're looking at heat and smoke exposure levels at outdoor music festivals held 
 
 | Name | GitHubID | Role / Focus |
 | --- | --- | --- |
-| Maaz Ullah Arshad | maazarshad | EPA collector + transform.py |
+| Maaz Ullah Arshad | maazarshad | EPA data collector  + EPA data cleaning |
 | Swechchha Parajuli | swechchhaparajuli | Github setup, Wikipedia scraper + streamlit app |
-| Erin Lukow | erinnalani | README content, contract finalization, NOAA + storage.py |
-| Zhengyang Dong  | mechanic2718 | GCP Setup, Dockerfiles + gcloud_command.sh + Cloud Run & Cloud Scheduler setup|
+| ZHENGYANG DONG | id | storage.py + Cloud deployment |
+| ERIN LUKOW | erinnalani | NOAA data collector + NOAA data cleaning |
 ---
 
 ## Problem Statement
@@ -26,15 +26,16 @@ We want to explore heat and smoke exposure at major U.S. music festivals to asse
 ### Sources
 | # | Source & Link | Method | What it contains | Update frequency | Access requirements |
 | --- | --- | --- | --- | --- | --- |
-| 1 | [NAME](https://exact-url) | API | rows, columns, time range, geography — in your own words | daily / monthly / static | free key, 100 req/day |
-| 2 | [NAME](https://exact-url) | File | ... | ... | none |
-| 3 | [NAME](https://exact-url) | Scraped | ... | ... | `robots.txt` checked DATE |
+| 1 | [WIKIPEDIA](https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States) | Scraped | Index page organized by state, then festival name. Fields extracted: festival_name, city, state, venue_name, recurring month, day_window, year_founded, genre, is_active Geography: 50 U.S. states | ~ monthly | None |
+| 2 | [NOAA NCEI DAILY SUMMARIES](https://www.ncei.noaa.gov/access/services/data/v1?dataset=daily-summaries&dataTypes=TMAX,TMIN,PRCP&stations=USW00023234&startDate=2025-01-01&endDate=2025-01-05&format=json) | API | GHCN daily-summaries dataset, 1 record per station per day. Fields to extract: station, date, tmax/tmin (t=temperature), PRCP (int), TAVG, AWND (int) | daily with ~ 1 day lag | None |
+| 3 | [EPA AQS Pre-Generated Daily Data Files](https://aqs.epa.gov/aqsweb/airdata/download_files.html) | File-based | One row per monitor per day. Fields to extract: State/Country code, site number, latitude/longitude, local date, arithmetic mean (24 hour PM2.5 mean), AQI, state name, county name | Biannual | None|
 
-Note: If we need a key, say which environment variable holds it and make sure that variable also appears in the .env
+Note: If we need a key, say which environment variable holds it and make sure that variable also appears in the .env_template
 
 ### Integration Goal
-- Follow the direction given in the 1st assignment
-
+1. Wikipedia supplies a festival index. It tells us which festivals exist, where they occur, and when. No measurements are taken from here.
+2. NOAA NCEI supplies heat measurements (daily maximum temperature) at the festival locations
+3. EPA AQS supplies the smoke and particulate measurements at the festival locations. We’re using PM2.5 because we’re interested in smoke particulates. There are no monitors inside venues to measure larger particulates like dust kicked up by festival goers.
 ---
 
 ## Setup Instructions (Locally)
@@ -47,7 +48,7 @@ Note: If we need a key, say which environment variable holds it and make sure th
 ### 1. Clone the repository
 ```bash
 git clone https://github.com/swechchhaparajuli/festival_smoke_detectors.git
-cd REPO
+cd festival_smoke_detectors
 ```
 
 ### 2. Configure environment variables
