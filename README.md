@@ -80,6 +80,7 @@ Make sure it writes the data in the bucket.
 .
 ├── fastapi/
 ├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
 ├──── requirements.txt
 ├──── api.py
 ├──── collectors/
@@ -90,6 +91,7 @@ Make sure it writes the data in the bucket.
 ├──── storage.py 
 ├── streamlit/
 ├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
 ├──── requirements.txt
 ├──── app.py
 ├── gcloud_command.sh
