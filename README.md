@@ -5,10 +5,10 @@ We're looking at heat and smoke exposure levels at outdoor music festivals held 
 
 | Name | GitHubID | Role / Focus |
 | --- | --- | --- |
-| SWECHCHHA PARAJULI| swechchhaparajuli | e.g. Streamlit app - map |
-| MAAZ ARSHAD | id | e.g. scraping for SF news data  + scheduled collection |
-| ZHENGYANG DONG | id | e.g. API call for SF crimedata + data cleaning |
-| ERIN LUKOW | erinnalani | e.g. Streamlit app - interactive bargraph|
+| SWECHCHHA PARAJULI| swechchhaparajuli | Wikipedia scraper + festival data cleaning + Streamlit app|
+| MAAZ ARSHAD | maazarshad | EPA data collector  + EPA data cleaning|
+| ZHENGYANG DONG | id | storage.py + Cloud deployment |
+| ERIN LUKOW | erinnalani | NOAA data collector + NOAA data cleaning |
 ---
 
 ## Problem Statement
