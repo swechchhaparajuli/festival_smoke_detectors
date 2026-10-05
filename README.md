@@ -7,7 +7,7 @@ We're looking at heat and smoke exposure levels at outdoor music festivals held 
 | --- | --- | --- |
 | Maaz Ullah Arshad | maazarshad | EPA data collector  + EPA data cleaning |
 | Swechchha Parajuli | swechchhaparajuli | Github setup, Wikipedia scraper + streamlit app |
-| ZHENGYANG DONG | id | storage.py + Cloud deployment |
+| ZHENGYANG DONG | mechanic2718 | GCP setup, initial FastAPI collector, shared storage, and deployment|
 | ERIN LUKOW | erinnalani | NOAA data collector + NOAA data cleaning |
 ---
 
@@ -42,8 +42,14 @@ Note: If we need a key, say which environment variable holds it and make sure th
 
 ### Prerequisites
 - Python 3.11+
-- A GCP service account key with access to PROJECT/BUCKET/DATASET
-- Any source API keys listed in the table below
+- Git.
+- Google Cloud CLI (`gcloud`).
+- A Google account with access to the team project and permission to upload objects to the bucket.
+
+Project ID: `festival-smoke-detector`  
+Bucket name: `festival_smoke_detector`
+
+The application uses Application Default Credentials (ADC). A service account JSON key is not required for local development.
 
 ### 1. Clone the repository
 ```bash
@@ -51,52 +57,97 @@ git clone https://github.com/swechchhaparajuli/festival_smoke_detectors.git
 cd festival_smoke_detectors
 ```
 
-### 2. Configure environment variables
-Copy the example file and fill in your own values:
+### 2. Create a virtual environment and install dependencies
+
+The following commands are for macOS or Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+Copy the template:
 
 ```bash
 cp .env_template .env
 ```
 
-| Variable | Description | Example |
-| --- | --- | --- |
-| `GCP_SERVICE_ACCOUNT_KEY` | Absolute path to your service account JSON | `/Users/you/.ssh/key.json` |
-| `SOURCE_API_KEY` | Key for SOURCE NAME (free tier) | `abc123...` |
-| `API_SERVICE_URL` | Where the web app reaches the API | `http://api-server:8000` |
+Open `.env` and fill in:
 
-### 4. How to call your endpoint
-To start the API server,
-```python
-fastapi run mycode.py
+```dotenv
+GCP_PROJECT_ID=festival-smoke-detector
+GCP_BUCKET_NAME=festival_smoke_detector
 ```
 
-```python
-requests.post("http://localhost:8000/something", json=something)
-```
-Make sure it writes the data in the bucket.
+| Variable | Description |
+| --- | --- |
+| `GCP_PROJECT_ID` | The exact Google Cloud project ID, not its display name. |
+| `GCP_BUCKET_NAME` | The Cloud Storage bucket name,without `gs://` |
 
----
+### 4. Authenticate with Google Cloud
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project festival-smoke-detector
+```
+
+Use the account that has been granted access to the team project and bucket. The Python application uses Application Default Credentials, so a shared service account key file is not required.
+
+### 5. Start FastAPI
+
+```bash
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open http://127.0.0.1:8000/docs to view and test the endpoints. Keep the server running while making requests.
+
+### 6. Collect EPA data
+
+In the API documentation, select `POST /collect/epa`, click **Try it out**, and submit:
+
+```json
+{
+  "year": 2025,
+  "state_code": "06",
+  "max_records": 1000
+}
+```
+
+Alternatively, run this in a second terminal:
+
+```bash
+curl -X POST http://127.0.0.1:8000/collect/epa \
+  -H "Content-Type: application/json" \
+  -d '{"year":2025,"state_code":"06","max_records":1000}'
+```
+
+This request downloads the EPA annual PM2.5 file and saves up to 1,000 California records. `"06"` is California's state FIPS code.
+
+The response includes the number of saved records and a `gcs_uri` pointing to the uploaded JSON:
+
+```text
+gs://festival_smoke_detector/raw/epa/<UTC collection date>/<filename>.json
+```
+
+The JSON contains the original record values and collection metadata. If `truncated` is `true`, additional matching records exist beyond the requested limit.
+
+The folder date is the UTC collection date, not the data year. Open the returned object in Cloud Storage to verify its contents.
+
+This workflow was tested locally using the request above. The API returned HTTP 200, and the uploaded JSON data was inspected in the team bucket.
+
 ## Repository Structure
-```
+
+```text
 .
-├── fastapi/
-├──── DOCKERFILE
-├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
-├──── requirements.txt
-├──── api.py
-├──── collectors/
-├────── noaa_collector.py
-├────── epa_collector.py
-├────── wikipedia_scraper.py
-├──── transform.py 
-├──── storage.py 
-├── streamlit/
-├──── DOCKERFILE
-├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
-├──── requirements.txt
-├──── app.py
-├── gcloud_command.sh
-├── .env
+├── main.py             # FastAPI application and EPA collector
+├── requirements.txt    # Python dependencies
+├── .env_template       # Environment variable template
+├── .gitignore
 ├── LICENSE
 └── README.md
 ```
+
+Local `.env` and `.venv/` files are excluded from Git.
