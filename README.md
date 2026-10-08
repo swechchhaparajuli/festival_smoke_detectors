@@ -142,10 +142,24 @@ This workflow was tested locally using the request above. The API returned HTTP 
 
 ```text
 .
-├── main.py             # FastAPI application and EPA collector
-├── requirements.txt    # Python dependencies
-├── .env_template       # Environment variable template
-├── .gitignore
+├── fastapi/
+├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
+├──── requirements.txt
+├──── api.py
+├──── collectors/
+├────── noaa_collector.py
+├────── epa_collector.py
+├────── wikipedia_scraper.py
+├──── transform.py 
+├──── storage.py 
+├── streamlit/
+├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
+├──── requirements.txt
+├──── app.py
+├── gcloud_command.sh
+├── .env
 ├── LICENSE
 └── README.md
 ```
