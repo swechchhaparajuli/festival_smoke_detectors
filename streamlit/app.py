@@ -54,9 +54,9 @@ if __name__ == '__main__':
                                       project_id,
                                       bucket_name,
                                       file_name_prefix)
-    festival_names = ", ".join(gcs_data["job_titles"])
-    noaa_dictionary = gcs_data["company_dict"]
-    epa_dictionary = gcs_data["company_dict"]
+    festival_names = ", ".join(gcs_data["festival_names"])
+    noaa_dictionary = gcs_data["noaa_dict"]
+    epa_dictionary = gcs_data["epa_dict"]
     data = pd.DataFrame(gcs_data["results"])
 
     st.title(f"Music Festivals")
