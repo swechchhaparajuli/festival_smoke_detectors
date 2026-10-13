@@ -5,7 +5,7 @@ import json
 
 from user_definition import *
 
-from data_acquisition.group_project.festival_smoke_detectors.fastapi.storage import write_blob
+from storage import write_blob
 
 
 header = {"User-Agent": "USF-course-project (enlukow@usfca.edu)"}
@@ -77,7 +77,7 @@ def collect_stations(fetch_date=None):
         # If failure, record failure and skip station
         except Exception as e:
             print(f"{station_id}: FAILED - {e}")
-            failed.append({"station": station_id, "error": {e}})
+            failed.append({"station": station_id, "error": str(e)})
             continue
 
         # Upload to GCS

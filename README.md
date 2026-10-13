@@ -98,45 +98,51 @@ Use the account that has been granted access to the team project and bucket. The
 
 ### 5. Start FastAPI
 
+Run from the `fastapi/` folder:
+
 ```bash
+cd fastapi
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000/docs to view and test the endpoints. Keep the server running while making requests.
+Open http://127.0.0.1:8000/docs to view and test the endpoints. Check http://127.0.0.1:8000/health first: it should show the project ID and bucket name from your `.env`.
 
-### 6. Collect EPA data
+### 6. Collect data
 
-In the API documentation, select `POST /collect/epa`, click **Try it out**, and submit:
+| Route | Source | Body | Saves to |
+| --- | --- | --- | --- |
+| `POST /collect/epa` | EPA AQS daily PM2.5 (yearly zip files) | `{"start_year": 1999, "end_year": 2025, "overwrite": false}` (all optional) | `raw/epa/<collection date>/daily_88101_<year>.zip` |
+| `POST /collect/noaa` | NOAA NCEI daily TMAX (API) | none, stations are set in `collectors/noaa_collector.py` | `raw/noaa/<collection date>/<station_id>.json` |
+| `POST /collect/festivals` | Wikipedia festival list (scraping) | none | `raw/festivals/...` (returns 501 until `collect_festivals()` is added) |
 
-```json
-{
-  "year": 2025,
-  "state_code": "06",
-  "max_records": 1000
-}
-```
+Each route returns what was saved, skipped and failed. One failed year/station doesn't stop the rest.
 
-Alternatively, run this in a second terminal:
+#### EPA details
+- Each year's zip is stored **as downloaded**: every U.S. monitor, every day, ~8 MB per year. Filtering to festival locations happens in `clean_epa()`.
+- We store the zip rather than JSON because one year is ~740k rows (hundreds of MB as JSON). Read it back with `pd.read_csv(io.BytesIO(read_blob(path)), dtype={"State Code": str, "County Code": str})` to keep leading zeros in FIPS codes.
+- Years already in the bucket (from any collection date) are skipped unless `"overwrite": true`.
+- Request about 5-10 years per call, e.g.:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/collect/epa \
   -H "Content-Type: application/json" \
-  -d '{"year":2025,"state_code":"06","max_records":1000}'
+  -d '{"start_year": 2020, "end_year": 2025}'
 ```
 
-This request downloads the EPA annual PM2.5 file and saves up to 1,000 California records. `"06"` is California's state FIPS code.
+### 7. Run the tests (no internet or GCP needed)
 
-The response includes the number of saved records and a `gcs_uri` pointing to the uploaded JSON:
-
-```text
-gs://festival_smoke_detector/raw/epa/<UTC collection date>/<filename>.json
+```bash
+cd fastapi
+python -m pytest -q
 ```
 
-The JSON contains the original record values and collection metadata. If `truncated` is `true`, additional matching records exist beyond the requested limit.
+### Adding or changing a collector
+Only edit your own file in `fastapi/collectors/`. `main.py` already has a route for each source that calls:
+- `epa_collector.collect_epa(start_year, end_year, overwrite)`
+- `noaa_collector.collect_stations()`
+- `wikipedia_scraper.collect_festivals()`
 
-The folder date is the UTC collection date, not the data year. Open the returned object in Cloud Storage to verify its contents.
-
-This workflow was tested locally using the request above. The API returned HTTP 200, and the uploaded JSON data was inspected in the team bucket.
+Keep those function names, save files with `write_blob(path, data)` from `storage.py`, and return a dict (e.g. saved / failed lists). Then the route works with no change to `main.py`.
 
 ## Repository Structure
 
@@ -146,7 +152,8 @@ This workflow was tested locally using the request above. The API returned HTTP 
 ├──── DOCKERFILE
 ├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
 ├──── requirements.txt
-├──── api.py
+├──── main.py
+├──── tests/
 ├──── collectors/
 ├────── noaa_collector.py
 ├────── epa_collector.py
