@@ -25,6 +25,7 @@ def each_festival(link):
     if geo: 
         lat, lon = geo.get_text().split(";")
 
+
     if len(f_soup.select(".infobox"))>0:
         info_box = f_soup.select(".infobox")[0]
         for row in info_box.select("tr"):
@@ -73,15 +74,13 @@ def get_scraped_festivals(url):
 
 
     for festival in festival_links_list:
+        section = festival.find_parent("section")
+        state = section["aria-labelledby"] if section else None
         festival_detail = each_festival(festival['href'])
         festival_details.append({"Name": festival.string, "longitude": festival_detail["longitude"], "latitude": festival_detail[
-                                "latitude"], "city_name": festival_detail["city_name"], "venue": festival_detail["venue"],
+                                "latitude"], "city_name": festival_detail["city_name"], "state": state, "venue": festival_detail["venue"],
                                 "year_founded": festival_detail["year_founded"], "genre": festival_detail["genre"], "is_active:": festival_detail["status"],
                                 "frequency": festival_detail["frequency"], "years_active": festival_detail["years_active"]})
-
-
-    print(festival['href'])
-
 
     print(festival_details)
 
