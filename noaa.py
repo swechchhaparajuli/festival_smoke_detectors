@@ -95,5 +95,5 @@ def collect_stations(fetch_date=None):
 if __name__=="__main__":
     records = get_station_data(STATIONS[0])
     print(f"Num of records: {len(records)}\
-          Expected # or records for 1999-2025: 9,800")
+          Expected # or records for 1999-2025: ~ 9,800")
     print(f"First: {records[0]}\nLast: {records[-1]}")
