@@ -26,8 +26,8 @@ app = FastAPI()
 
 # On first start of the app -- the transform and storage functions are run so that all of the data is reloaded
 
-@app.post("/load_data")
-def load_data():
+@app.post("/extract_and_save")
+def extract_and_save():
     """
     Use 
 
