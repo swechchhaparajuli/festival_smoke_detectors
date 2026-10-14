@@ -1,169 +1,97 @@
-## MAAZ and ZHENGYANG's EPA CODE HERE
-import csv
+"""EPA AQS daily PM2.5 collector (Maaz).
+
+Source: EPA AirData pre-generated files, one zip per year
+        https://aqs.epa.gov/aqsweb/airdata/daily_88101_<YEAR>.zip
+Method: file download from a stable URL (no API key, public data)
+
+Each year's zip is stored exactly as downloaded (all US monitors, every day):
+        raw/epa/<collection date YYYY-MM-DD>/daily_88101_<YEAR>.zip
+
+Why the zip and not JSON: one year is ~740k rows. As JSON that is hundreds of MB per year;
+the zip is ~8 MB, and pandas reads it directly (pd.read_csv(io.BytesIO(read_blob(path)))).
+Filtering to festival locations happens later in clean_epa().
+"""
 import io
-import json
-import os
-import uuid
 import zipfile
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import date
 
 import requests
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from google.api_core.exceptions import Forbidden, GoogleAPIError
-from google.auth.exceptions import DefaultCredentialsError
-from google.cloud import storage
-from pydantic import BaseModel, Field
+
+from storage import list_blobs, write_blob
+
+EPA_BASE_URL = "https://aqs.epa.gov/aqsweb/airdata"
+PARAMETER_CODE = "88101"  # PM2.5 FRM/FEM mass
+START_YEAR = 1999          # team decision: 1999-present (PM2.5 network starts 1999)
+END_YEAR = 2025
+REQUIRED_COLUMNS = {"State Code", "County Code", "Site Num", "Date Local", "Arithmetic Mean"}
+HEADERS = {"User-Agent": "USF-course-project festival_smoke_detectors (EPA collector)"}
 
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
-
-app = FastAPI(title="Festival Smoke Detectors")
-
-
-class EPARequest(BaseModel):
-    year: int = Field(
-        default=2025,
-        ge=1999,
-        le=datetime.now(timezone.utc).year,
-    )
-    state_code: str = Field(default="06", pattern=r"^\d{2}$")
-    max_records: int = Field(default=1000, ge=1, le=10000)
+def file_name(year):
+    return f"daily_{PARAMETER_CODE}_{year}.zip"
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+def find_existing(year):
+    """Return the bucket path if this year's zip was collected on any earlier date, else None."""
+    suffix = "/" + file_name(year)
+    for name in list_blobs("raw/epa/"):
+        if name.endswith(suffix):
+            return name
+    return None
 
 
-@app.post("/collect/epa")
-def collect_epa(options: EPARequest):
-    project_id = os.getenv("GCP_PROJECT_ID", "").strip()
-    bucket_name = os.getenv("GCP_BUCKET_NAME", "").strip()
+def download_year(year):
+    """Download one year's zip and check it really is the EPA CSV we expect. Returns bytes."""
+    url = f"{EPA_BASE_URL}/{file_name(year)}"
+    r = requests.get(url, headers=HEADERS, timeout=(10, 300))
+    r.raise_for_status()
+    content = r.content
 
-    if not project_id or not bucket_name:
-        raise HTTPException(
-            status_code=503,
-            detail="Set GCP_PROJECT_ID and GCP_BUCKET_NAME in .env.",
-        )
-
-    source_url = (
-        "https://aqs.epa.gov/aqsweb/airdata/"
-        f"daily_88101_{options.year}.zip"
-    )
-
-    # EPA publishes annual ZIP archives containing daily PM2.5 CSV data.
+    # EPA sometimes answers 200 with an HTML page (maintenance / missing year): reject it.
     try:
-        with requests.get(source_url, timeout=(10, 120)) as response:
-            response.raise_for_status()
-            archive_bytes = response.content
-    except requests.RequestException as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Could not download the requested EPA annual file.",
-        ) from exc
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            csv_name = f"daily_{PARAMETER_CODE}_{year}.csv"
+            with archive.open(csv_name) as f:
+                header = f.readline().decode("utf-8-sig").strip()
+    except (zipfile.BadZipFile, KeyError) as e:
+        raise ValueError(f"{url} did not return the expected zip/CSV ({e})") from e
 
-    records = []
-    truncated = False
-    csv_name = f"daily_88101_{options.year}.csv"
+    columns = {c.strip('"') for c in header.split(",")}
+    missing = REQUIRED_COLUMNS - columns
+    if missing:
+        raise ValueError(f"{url} is missing columns: {sorted(missing)}")
+    return content
 
-    # Keep original string values, including leading zeros in FIPS codes.
-    try:
-        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-            with archive.open(csv_name) as csv_file:
-                reader = csv.DictReader(
-                    io.TextIOWrapper(csv_file, encoding="utf-8-sig")
-                )
 
-                required_columns = {
-                    "State Code",
-                    "Date Local",
-                    "Arithmetic Mean",
-                }
-                if not required_columns.issubset(reader.fieldnames or []):
-                    raise ValueError("Required EPA columns are missing.")
+def collect_epa(start_year=START_YEAR, end_year=END_YEAR, overwrite=False, fetch_date=None):
+    """Download each year's zip and upload it to GCS under raw/epa/.
 
-                for row in reader:
-                    if row["State Code"] != options.state_code:
-                        continue
+    Years already in the bucket are skipped unless overwrite=True.
+    A failed year is recorded and skipped so one bad year doesn't stop the rest.
 
-                    if len(records) == options.max_records:
-                        truncated = True
-                        break
+    Returns: dict with "saved", "skipped_existing" and "failed" lists.
+    """
+    fetch_date = fetch_date or date.today()
+    saved, skipped, failed = [], [], []
 
-                    records.append(row)
+    for year in range(start_year, end_year + 1):
+        if not overwrite:
+            existing = find_existing(year)
+            if existing:
+                skipped.append({"year": year, "path": existing})
+                continue
+        try:
+            content = download_year(year)
+            path = f"raw/epa/{fetch_date}/{file_name(year)}"
+            uri = write_blob(path, content, content_type="application/zip")
+            saved.append({"year": year, "gcs_uri": uri, "bytes": len(content)})
+        except Exception as e:
+            print(f"EPA {year}: FAILED - {e}")
+            failed.append({"year": year, "error": str(e)})
 
-    except (
-        zipfile.BadZipFile,
-        KeyError,
-        UnicodeError,
-        csv.Error,
-        ValueError,
-    ) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="The EPA download was not in the expected CSV format.",
-        ) from exc
+    return {"saved": saved, "skipped_existing": skipped, "failed": failed}
 
-    if not records:
-        raise HTTPException(
-            status_code=404,
-            detail="No EPA records matched the requested year and state.",
-        )
 
-    collected_at = datetime.now(timezone.utc)
-    object_name = (
-        f"raw/epa/{collected_at:%Y-%m-%d}/"
-        f"daily_88101_{options.year}_{options.state_code}_"
-        f"{uuid.uuid4().hex}.json"
-    )
-
-    document = {
-        "source_url": source_url,
-        "collected_at": collected_at.isoformat(),
-        "year": options.year,
-        "state_code": options.state_code,
-        "max_records": options.max_records,
-        "record_count": len(records),
-        "truncated": truncated,
-        "records": records,
-    }
-
-    try:
-        client = storage.Client(project=project_id)
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(object_name)
-
-        # Create a new object; do not overwrite an existing object.
-        blob.upload_from_string(
-            json.dumps(document, ensure_ascii=False),
-            content_type="application/json",
-            if_generation_match=0,
-            timeout=120,
-        )
-    except DefaultCredentialsError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Run gcloud auth application-default login.",
-        ) from exc
-    except Forbidden as exc:
-        raise HTTPException(
-            status_code=403,
-            detail="Your Google account cannot write to the configured bucket.",
-        ) from exc
-    except GoogleAPIError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Cloud Storage upload failed. Check the project and bucket.",
-        ) from exc
-
-    return {
-        "status": "uploaded",
-        "year": options.year,
-        "state_code": options.state_code,
-        "record_count": len(records),
-        "truncated": truncated,
-        "gcs_uri": f"gs://{bucket_name}/{object_name}",
-        "source_url": source_url,
-    }
+if __name__ == "__main__":
+    # Quick manual check without the API: python collectors/epa_collector.py (from fastapi/)
+    print(collect_epa(2024, 2024))
