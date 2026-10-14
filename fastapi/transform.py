@@ -1,3 +1,5 @@
+import io
+
 import pandas as pd
 
 START_DATE = '1999-01-01'
@@ -43,6 +45,66 @@ def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
     final_df = pd.concat(station_tables, ignore_index=True)
 
     return final_df
+
+
+EPA_COLUMNS = {
+    "State Code": "state_code",
+    "County Code": "county_code",
+    "Site Num": "site_num",
+    "Latitude": "latitude",
+    "Longitude": "longitude",
+    "Date Local": "date",
+    "Event Type": "event_type",
+    "Arithmetic Mean": "pm25",
+    "AQI": "aqi",
+    "State Name": "state_name",
+    "County Name": "county_name",
+}
+
+
+def clean_epa(zip_files, start_date=START_DATE, end_date=END_DATE):
+    if isinstance(zip_files, bytes):
+        zip_files = [zip_files]
+
+    yearly_tables = []
+    for content in zip_files:
+        raw_df = pd.read_csv(
+            io.BytesIO(content),
+            compression="zip",
+            usecols=list(EPA_COLUMNS),
+            dtype={"State Code": str, "County Code": str,
+                   "Site Num": str, "Event Type": str},
+        )
+        df = raw_df.rename(columns=EPA_COLUMNS)
+        df = df[df["event_type"] != "Excluded"].copy()
+
+        df["state_code"] = df["state_code"].str.zfill(2)
+        df["county_code"] = df["county_code"].str.zfill(3)
+        df["site_num"] = df["site_num"].str.zfill(4)
+        df["county_fips"] = df["state_code"] + df["county_code"]
+        df["site_id"] = df["county_fips"] + df["site_num"]
+        df["date"] = pd.to_datetime(df["date"])
+
+        daily = (
+            df.groupby(["site_id", "date"], as_index=False)
+            .agg(county_fips=("county_fips", "first"),
+                 state_name=("state_name", "first"),
+                 county_name=("county_name", "first"),
+                 latitude=("latitude", "first"),
+                 longitude=("longitude", "first"),
+                 pm25=("pm25", "mean"),
+                 aqi=("aqi", "max"))
+        )
+        yearly_tables.append(daily)
+
+    epa_df = pd.concat(yearly_tables, ignore_index=True)
+    in_range = epa_df["date"].between(start_date, end_date)
+    epa_df = epa_df[in_range].sort_values(["site_id", "date"])
+
+    return epa_df.reset_index(drop=True)[
+        ["site_id", "county_fips", "state_name", "county_name",
+         "latitude", "longitude", "date", "pm25", "aqi"]
+    ]
 
 
 if __name__=="__main__":

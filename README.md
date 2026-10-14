@@ -98,38 +98,48 @@ Use the account that has been granted access to the team project and bucket. The
 
 ### 5. Start FastAPI
 
-Run from the `fastapi/` folder:
+From the `fastapi/` folder:
 
 ```bash
 cd fastapi
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+fastapi dev main.py
 ```
 
-Open http://127.0.0.1:8000/docs to view and test the endpoints. Check http://127.0.0.1:8000/health first: it should show the project ID and bucket name from your `.env`.
+`fastapi dev` restarts the server when code changes. Use `fastapi run main.py` to run it without auto-reload (this is what the Dockerfile uses).
+
+Open http://127.0.0.1:8000/docs to test the endpoints. http://127.0.0.1:8000/health should show the project ID and bucket name from `.env`.
 
 ### 6. Collect data
 
 | Route | Source | Body | Saves to |
 | --- | --- | --- | --- |
-| `POST /collect/epa` | EPA AQS daily PM2.5 (yearly zip files) | `{"start_year": 1999, "end_year": 2025, "overwrite": false}` (all optional) | `raw/epa/<collection date>/daily_88101_<year>.zip` |
+| `POST /collect/epa` | EPA AQS daily PM2.5 (yearly zip files) | `{"start_year": 1999, "end_year": 2025, "overwrite": false}`, all optional | `raw/epa/<collection date>/daily_88101_<year>.zip` |
 | `POST /collect/noaa` | NOAA NCEI daily TMAX (API) | none, stations are set in `collectors/noaa_collector.py` | `raw/noaa/<collection date>/<station_id>.json` |
-| `POST /collect/festivals` | Wikipedia festival list (scraping) | none | `raw/festivals/...` (returns 501 until `collect_festivals()` is added) |
+| `POST /collect/festivals` | Wikipedia festival list (scraping) | none | `raw/festivals/...`, returns 501 until `get_scraped_festivals()` exists |
 
-Each route returns what was saved, skipped and failed. One failed year/station doesn't stop the rest.
+Each route returns what was saved, skipped and failed.
 
-#### EPA details
-- Each year's zip is stored **as downloaded**: every U.S. monitor, every day, ~8 MB per year. Filtering to festival locations happens in `clean_epa()`.
-- We store the zip rather than JSON because one year is ~740k rows (hundreds of MB as JSON). Read it back with `pd.read_csv(io.BytesIO(read_blob(path)), dtype={"State Code": str, "County Code": str})` to keep leading zeros in FIPS codes.
-- Years already in the bucket (from any collection date) are skipped unless `"overwrite": true`.
-- Request about 5-10 years per call, e.g.:
+#### EPA
+- Each year's zip is stored as downloaded (all U.S. monitors, every day, about 8 MB per year).
+- We keep the zip instead of JSON because one year is about 740k rows, which would be hundreds of MB as JSON.
+- Years already in the bucket are skipped unless `"overwrite": true`.
+- 1999-2025 has already been collected to `raw/epa/2026-10-13/`.
 
-```bash
-curl -X POST http://127.0.0.1:8000/collect/epa \
-  -H "Content-Type: application/json" \
-  -d '{"start_year": 2020, "end_year": 2025}'
+`clean_epa()` in `transform.py` turns the zips into one row per monitoring site per day:
+
+```python
+from storage import list_blobs, read_blob
+from transform import clean_epa
+
+paths = [p for p in list_blobs("raw/epa/") if p.endswith(".zip")]
+epa_df = clean_epa([read_blob(p) for p in paths])
 ```
 
-### 7. Run the tests (no internet or GCP needed)
+Columns: `site_id`, `county_fips`, `state_name`, `county_name`, `latitude`, `longitude`, `date`, `pm25` (µg/m³), `aqi`. `site_id` and `county_fips` are strings so leading zeros are kept.
+
+### 7. Run the tests
+
+No internet or GCP access needed:
 
 ```bash
 cd fastapi
@@ -137,12 +147,12 @@ python -m pytest -q
 ```
 
 ### Adding or changing a collector
-Only edit your own file in `fastapi/collectors/`. `main.py` already has a route for each source that calls:
+`main.py` has a route for each source that calls:
 - `epa_collector.collect_epa(start_year, end_year, overwrite)`
 - `noaa_collector.collect_stations()`
-- `wikipedia_scraper.collect_festivals()`
+- `wikipedia_scraper.get_scraped_festivals(url)`
 
-Keep those function names, save files with `write_blob(path, data)` from `storage.py`, and return a dict (e.g. saved / failed lists). Then the route works with no change to `main.py`.
+Keep those function names, save files with `write_blob(path, data)` from `storage.py`, and return a dict. The route then works without changing `main.py`.
 
 ## Repository Structure
 
