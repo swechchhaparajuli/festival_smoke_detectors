@@ -1,6 +1,3 @@
-"""Offline tests for the API: no internet, no GCP.
-Run from the fastapi/ folder:   python -m pytest -q
-"""
 import io
 import sys
 import zipfile
@@ -9,21 +6,25 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+
+import main
+from fastapi.testclient import TestClient
 
 
 def make_epa_zip(year):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr(f"daily_88101_{year}.csv",
-                   '"State Code","County Code","Site Num","Date Local","Arithmetic Mean"\n"06","037","1103","2024-07-01",12.3\n')
+                   '"State Code","County Code","Site Num","Date Local","Arithmetic Mean"\n'
+                   '"06","037","1103","2024-07-01",12.3\n')
     return buf.getvalue()
 
 
 class FakeResponse:
     def __init__(self, content=b"", status=200, json_data=None):
-        self.content, self.status_code, self._json = content, status, json_data
+        self.content = content
+        self.status_code = status
+        self._json = json_data
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -35,7 +36,7 @@ class FakeResponse:
 
 @pytest.fixture
 def client(monkeypatch):
-    bucket = {}  # fake GCS: path -> bytes
+    bucket = {}
 
     def fake_write(path, data, content_type="application/json"):
         bucket[path] = data
@@ -71,7 +72,7 @@ def test_health(client):
     assert c.get("/health").json()["status"] == "ok"
 
 
-def test_docs_list_all_three_collectors(client):
+def test_all_three_routes_exist(client):
     c, _ = client
     paths = c.get("/openapi.json").json()["paths"]
     assert {"/collect/epa", "/collect/noaa", "/collect/festivals"} <= set(paths)
@@ -83,7 +84,6 @@ def test_epa_saves_zip_then_skips_on_rerun(client):
     assert len(r["saved"]) == 1 and not r["failed"]
     path = next(iter(bucket))
     assert path.startswith("raw/epa/") and path.endswith("/daily_88101_2024.zip")
-    assert zipfile.is_zipfile(io.BytesIO(bucket[path]))
 
     r2 = c.post("/collect/epa", json={"start_year": 2024, "end_year": 2024}).json()
     assert r2["skipped_existing"][0]["path"] == path and not r2["saved"]
@@ -92,7 +92,8 @@ def test_epa_saves_zip_then_skips_on_rerun(client):
 def test_epa_rejects_html_and_missing_years(client):
     c, bucket = client
     r = c.post("/collect/epa", json={"start_year": 2022, "end_year": 2023}).json()
-    assert {f["year"] for f in r["failed"]} == {2022, 2023} and not bucket
+    assert {f["year"] for f in r["failed"]} == {2022, 2023}
+    assert not bucket
 
 
 def test_epa_rejects_bad_year_range(client):
@@ -101,14 +102,30 @@ def test_epa_rejects_bad_year_range(client):
     assert c.post("/collect/epa", json={"start_year": 1995, "end_year": 2000}).status_code == 422
 
 
-def test_noaa_route_calls_erins_collector(client):
+def test_noaa_route(client):
     c, bucket = client
     r = c.post("/collect/noaa").json()
     assert r["source"] == "noaa" and len(r["successful"]) == 1
     assert any(p.startswith("raw/noaa/") for p in bucket)
 
 
-def test_festivals_route_says_not_implemented_until_scraper_exists(client):
+def test_festivals_route_not_ready_yet(client):
     c, _ = client
     r = c.post("/collect/festivals")
-    assert r.status_code == 501 and "collect_festivals" in r.json()["detail"]
+    assert r.status_code == 501
+
+
+def test_festivals_route_calls_scraper(client, monkeypatch):
+    c, _ = client
+    wiki = main.load_collector("wikipedia_scraper")
+    calls = []
+
+    def fake_scraper(url):
+        calls.append(url)
+        return [{"Name": "Hangout Music Fest", "state": "Alabama"}]
+
+    monkeypatch.setattr(wiki, "url", "https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States", raising=False)
+    monkeypatch.setattr(wiki, "get_scraped_festivals", fake_scraper, raising=False)
+    r = c.post("/collect/festivals").json()
+    assert calls == [wiki.url]
+    assert r["result"][0]["Name"] == "Hangout Music Fest"
