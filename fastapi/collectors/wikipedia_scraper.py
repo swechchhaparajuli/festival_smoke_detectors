@@ -12,9 +12,10 @@
 from bs4 import BeautifulSoup
 import requests
 from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
 
 
-def each_festival(link):
+def each_festival(link, us_state):
     response = requests.get(link, headers=headers, timeout=30)
     f_html_text = response.text
     f_soup = BeautifulSoup(f_html_text, "html.parser")
@@ -46,15 +47,26 @@ def each_festival(link):
                "years_active": info.get("Years active")
                }
     # need to fix this so it doesnt crash and timeout 
-    # if details["city_name"] is None: 
-    #     location = geolocator.reverse((lat, lon))
-    #     print(location)
+    if details["city_name"] is None and lat is not None and lon is not None: 
+        location = geolocator.reverse((lat, lon), language="en")
+        if location:
+            address = location.raw.get("address", {})
+            details["city_name"] = (address.get("city") or address.get("town")
+                                    or address.get("village") or address.get("hamlet"))
+            details["county"] = address.get("county")
+    elif (lat is None or lon is None) and details["city_name"] is not None:
+        location = geocode(f'{details["city_name"]}, {us_state}', country_codes="us")
+        if location:
+            details["latitude"], details["longitude"] = location.latitude, location.longitude
 
     ## add extra info to retrieve city names that are missing :) 
     
     return details
 
-geolocator = Nominatim(user_agent="festival_smoke_detectors", timeout=10)
+geolocator = Nominatim(user_agent="Festival_Smoke_Detectors/1.0 (swechchha@gmail.com)", timeout=10)
+reverse = RateLimiter(geolocator.reverse, min_delay_seconds=1)
+geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+
 
 headers = {
     "User-Agent": "Festival_Smoke_Detectors/1.0 (https://github.com/swechchhaparajuli/festival_smoke_detectors; swechchha@gmail.com) python-requests/2.32"
@@ -76,13 +88,12 @@ def get_scraped_festivals(url):
     for festival in festival_links_list:
         section = festival.find_parent("section")
         state = section["aria-labelledby"] if section else None
-        festival_detail = each_festival(festival['href'])
+        festival_detail = each_festival(festival['href'], state)
         festival_details.append({"Name": festival.string, "longitude": festival_detail["longitude"], "latitude": festival_detail[
                                 "latitude"], "city_name": festival_detail["city_name"], "state": state, "venue": festival_detail["venue"],
                                 "year_founded": festival_detail["year_founded"], "genre": festival_detail["genre"], "is_active:": festival_detail["status"],
                                 "frequency": festival_detail["frequency"], "years_active": festival_detail["years_active"]})
 
-    print(festival_details)
 
 # for test
 if __name__=="__main__":
