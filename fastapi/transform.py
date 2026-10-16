@@ -109,7 +109,7 @@ def clean_epa():
 def join_data(noaa, epa, festivals):
     # Join all cleaned data together into one dataframe
     data_df = festivals.merge(noaa, on=["station_id", "date"], how="left")
-    data_df = df.merge(epa, left_on=["fips", "date"],
+    data_df = data_df.merge(epa, left_on=["fips", "date"],
                         right_on=["county_fips", "date"], how="left")
 
     return data_df

@@ -13,7 +13,7 @@ from google.cloud import storage
 from user_definition import project_id, bucket_name
 
 
-@lru_cache
+@lru_cache # Looked this up to know how to cache credentials
 def _bucket():
     client = storage.Client(project_id)
     return client.bucket(bucket_name)

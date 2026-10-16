@@ -11,7 +11,10 @@ from storage import write_blob
 header = {"User-Agent": "USF-course-project (enlukow@usfca.edu)"}
 url = "https://www.ncei.noaa.gov/access/services/data/v1"
 
-STATIONS = ["USW00023234"] # update after Swechchha determines what stations we need
+STATIONS = ["USC00012172", "USC00044259", "USC00046399", "USC00087826", "USC00080236"
+            "USW00013873", "USW00053819", "USW00014933", "USC00148259", "USC00155694",
+            "USW00012930", "USC00186350", "USC00205567", "USC00200032", "USC00218450",
+            "USW00013893", "USW00013897", "USW00014920"]
 START_DATE = "1999-01-01"
 END_DATE = "2025-12-31"
 
