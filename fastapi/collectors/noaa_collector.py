@@ -77,7 +77,7 @@ def collect_stations(fetch_date=None):
         # If failure, record failure and skip station
         except Exception as e:
             print(f"{station_id}: FAILED - {e}")
-            failed.append({"station": station_id, "error": {e}})
+            failed.append({"station": station_id, "error": str(e)})
             continue
 
         # Upload to GCS

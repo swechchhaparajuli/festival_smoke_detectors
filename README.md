@@ -5,18 +5,23 @@ We're looking at heat and smoke exposure levels at outdoor music festivals held 
 
 | Name | GitHubID | Role / Focus |
 | --- | --- | --- |
-| SWECHCHHA PARAJULI| swechchhaparajuli | Wikipedia scraper + festival data cleaning + Streamlit app|
-| MAAZ ARSHAD | maazarshad | EPA data collector  + EPA data cleaning|
-| ZHENGYANG DONG | id | storage.py + Cloud deployment |
+| Maaz Ullah Arshad | maazarshad | EPA data collector  + EPA data cleaning |
+| Swechchha Parajuli | swechchhaparajuli | Github setup, Wikipedia scraper + streamlit app |
+| ZHENGYANG DONG | mechanic2718 | GCP setup, initial FastAPI collector, shared storage, and deployment|
 | ERIN LUKOW | erinnalani | NOAA data collector + NOAA data cleaning |
 ---
 
 ## Problem Statement
-We want to explore heat and smoke exposure at major U.S. music festivals to assess the riskiness of the locations where outdoor festivals are regularly held. We combine an inventory of major U.S. music festivals scraped from Wikipedia (including name, city, and recurring annual date) with NOAA NCEI daily weather summaries via API and EPA AirData daily PM2.5 concentration files to make a heat-smoke exposure profile for each festival's location and time of year. Because each festival recurs at roughly the same week each year, they can be associated with a specific location-date combo, which we can use to ask: 1. which combos historically have the riskiest weather conditions and 2. whether the conditions have shifted in the last 30 years.
+
+We want to explore heat and smoke exposure at major U.S. music festivals to assess the riskiness of the locations where outdoor festivals are regularly held. We combine an inventory of major U.S. music festivals scraped from Wikipedia (including name, city, and recurring annual date) with NOAA NCEI daily weather summaries via API and EPA AirData daily PM2.5 concentration files to make a heat-smoke exposure profile for each festival's location and time of year. Because each festival recurs at roughly the same week each year, they can be associated with a specific location-date combo, which we can use to ask:
+
+1. which combos historically have the riskiest weather conditions and
+2. whether the conditions have shifted in the last 30 years.
+
 ---
 
 ## Data Sources and Integration Goal
-
+- Follow the direction given in the 1st assignment
 
 ### Sources
 | # | Source & Link | Method | What it contains | Update frequency | Access requirements |
@@ -37,8 +42,14 @@ Note: If we need a key, say which environment variable holds it and make sure th
 
 ### Prerequisites
 - Python 3.11+
-- A GCP service account key with access to PROJECT/BUCKET/DATASET
-- Any source API keys listed in the table below
+- Git.
+- Google Cloud CLI (`gcloud`).
+- A Google account with access to the team project and permission to upload objects to the bucket.
+
+Project ID: `festival-smoke-detector`  
+Bucket name: `festival_smoke_detector`
+
+The application uses Application Default Credentials (ADC). A service account JSON key is not required for local development.
 
 ### 1. Clone the repository
 ```bash
@@ -46,35 +57,118 @@ git clone https://github.com/swechchhaparajuli/festival_smoke_detectors.git
 cd festival_smoke_detectors
 ```
 
-### 2. Configure environment variables
-Copy the example file and fill in your own values:
+### 2. Create a virtual environment and install dependencies
+
+The following commands are for macOS or Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+Copy the template:
 
 ```bash
 cp .env_template .env
 ```
 
-| Variable | Description | Example |
-| --- | --- | --- |
-| `GCP_SERVICE_ACCOUNT_KEY` | Absolute path to your service account JSON | `/Users/you/.ssh/key.json` |
-| `SOURCE_API_KEY` | Key for SOURCE NAME (free tier) | `abc123...` |
-| `API_SERVICE_URL` | Where the web app reaches the API | `http://api-server:8000` |
+Open `.env` and fill in:
 
-### 4. How to call your endpoint
-To start the API server,
-```python
-fastapi run mycode.py
+```dotenv
+GCP_PROJECT_ID=festival-smoke-detector
+GCP_BUCKET_NAME=festival_smoke_detector
 ```
 
-```python
-requests.post("http://localhost:8000/something", json=something)
-```
-Make sure it writes the data in the bucket.
+| Variable | Description |
+| --- | --- |
+| `GCP_PROJECT_ID` | The exact Google Cloud project ID, not its display name. |
+| `GCP_BUCKET_NAME` | The Cloud Storage bucket name,without `gs://` |
 
----
+### 4. Authenticate with Google Cloud
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project festival-smoke-detector
+```
+
+Use the account that has been granted access to the team project and bucket. The Python application uses Application Default Credentials, so a shared service account key file is not required.
+
+### 5. Start FastAPI
+
+Run from the `fastapi/` folder:
+
+```bash
+cd fastapi
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open http://127.0.0.1:8000/docs to view and test the endpoints. Check http://127.0.0.1:8000/health first: it should show the project ID and bucket name from your `.env`.
+
+### 6. Collect data
+
+| Route | Source | Body | Saves to |
+| --- | --- | --- | --- |
+| `POST /collect/epa` | EPA AQS daily PM2.5 (yearly zip files) | `{"start_year": 1999, "end_year": 2025, "overwrite": false}` (all optional) | `raw/epa/<collection date>/daily_88101_<year>.zip` |
+| `POST /collect/noaa` | NOAA NCEI daily TMAX (API) | none, stations are set in `collectors/noaa_collector.py` | `raw/noaa/<collection date>/<station_id>.json` |
+| `POST /collect/festivals` | Wikipedia festival list (scraping) | none | `raw/festivals/...` (returns 501 until `collect_festivals()` is added) |
+
+Each route returns what was saved, skipped and failed. One failed year/station doesn't stop the rest.
+
+#### EPA details
+- Each year's zip is stored **as downloaded**: every U.S. monitor, every day, ~8 MB per year. Filtering to festival locations happens in `clean_epa()`.
+- We store the zip rather than JSON because one year is ~740k rows (hundreds of MB as JSON). Read it back with `pd.read_csv(io.BytesIO(read_blob(path)), dtype={"State Code": str, "County Code": str})` to keep leading zeros in FIPS codes.
+- Years already in the bucket (from any collection date) are skipped unless `"overwrite": true`.
+- Request about 5-10 years per call, e.g.:
+
+```bash
+curl -X POST http://127.0.0.1:8000/collect/epa \
+  -H "Content-Type: application/json" \
+  -d '{"start_year": 2020, "end_year": 2025}'
+```
+
+### 7. Run the tests (no internet or GCP needed)
+
+```bash
+cd fastapi
+python -m pytest -q
+```
+
+### Adding or changing a collector
+Only edit your own file in `fastapi/collectors/`. `main.py` already has a route for each source that calls:
+- `epa_collector.collect_epa(start_year, end_year, overwrite)`
+- `noaa_collector.collect_stations()`
+- `wikipedia_scraper.collect_festivals()`
+
+Keep those function names, save files with `write_blob(path, data)` from `storage.py`, and return a dict (e.g. saved / failed lists). Then the route works with no change to `main.py`.
+
 ## Repository Structure
-```
+
+```text
 .
-├── your_code.py
-├── .env_template
+├── fastapi/
+├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
+├──── requirements.txt
+├──── main.py
+├──── tests/
+├──── collectors/
+├────── noaa_collector.py
+├────── epa_collector.py
+├────── wikipedia_scraper.py
+├──── transform.py 
+├──── storage.py 
+├── streamlit/
+├──── DOCKERFILE
+├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
+├──── requirements.txt
+├──── app.py
+├── gcloud_command.sh
+├── .env
+├── LICENSE
 └── README.md
 ```
+
+Local `.env` and `.venv/` files are excluded from Git.
