@@ -1,7 +1,18 @@
 import pandas as pd
+import io
 
 START_DATE = '1999-01-01'
 END_DATE = '2025-12-31'
+
+EPA_COLUMNS = {
+    "State Code": "state_code",
+    "County Code": "county_code",
+    "Date Local": "date",
+    "Sample Duration": "sample_duration",
+    "Arithmetic Mean": "pm25",
+    "State Name": "state_name",
+    "County Name": "county_name",
+}
 
 def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
     """
@@ -44,12 +55,50 @@ def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
 
     return final_df
 
+def clean_epa():
+    """"
+    Cleans epa zip files pulled using epa.py.
 
-if __name__=="__main__":
-    sample = [
-        {"DATE": "1999-01-01", "STATION": "USW00023234", "TMAX": "  128"},
-        {"DATE": "1999-01-02", "STATION": "USW00023234", "TMAX": "  156"},
-        {"DATE": "1999-01-05", "STATION": "USW00023234", "TMAX": "  206"},
+    Aggregates all values for one site to one row per county per day,
+    allowing join with festival table. Counties with several monitor
+    readings are averaged.
+
+    Returns: df with the columns: [county_fips, date, pm25, state_name,
+    county_name]. Each row = 1 county on 1 day.
+
+    """
+    if isinstance(zip_files, bytes):
+        zip_files = [zip_files]
+
+    yearly_tables = []
+    for content in zip_files:
+        raw_df = pd.read_csv(
+            io.BytesIO(content),
+            compression="zip",
+            usecols=list(EPA_COLUMNS),
+            dtype={"State Code": str, "County Code": str},
+        )
+        df = raw_df.rename(columns=EPA_COLUMNS)
+
+        # Create county fips code: 2 digit state code + 3 digit county code
+        df["county_fips"] = (df["state_code"].str.zfill(2)
+                              + df["county_code"].str.zfill(3))
+
+        df["date"] = pd.to_datetime(df["date"])
+
+        # Average across every monitor for that day
+        daily = (
+            df.groupby(["county_fips", "date"], as_index=False)
+            .agg(pm25=("pm25", "mean"),
+                 state_name=("state_name", "first"),
+                 county_name=("county_name", "first"))
+        )
+        yearly_tables.append(daily)
+
+    epa_df = pd.concat(yearly_tables, ignore_index=True)
+    in_range = epa_df["date"].between(start_date, end_date)
+    epa_df = epa_df[in_range].sort_values(["county_fips", "date"])
+
+    return epa_df.reset_index(drop=True)[
+        ["county_fips", "date", "pm25", "state_name", "county_name"]
     ]
-
-    final = clean_noaa(sample, '1999-01-01', '1999-01-06')
