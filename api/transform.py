@@ -143,7 +143,7 @@ def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
 
     return final_df
 
-def clean_epa():
+def clean_epa(zip_files, start_date=START_DATE, end_date=END_DATE):
     """"
     Cleans epa zip files pulled using epa.py.
 
