@@ -3,23 +3,22 @@ from datetime import date
 import re
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 
-## These are our collectors: 
-from epa_collector import *
-from noaa_collector import *
-from wikipedia_scraper import * 
+## These are our collectors:
+from collectors.epa_collector import collect_epa
+from collectors.noaa_collector import collect_stations
+from collectors.wikipedia_scraper import get_scraped_festivals
 
-## the transform.py will transform the data into once document before we can store it into gcs 
+## the transform.py will transform the data into once document before we can store it into gcs
 from transform import *
 
-## storage - we can call the function inside storage.py 
+## storage - we can call the function inside storage.py
 from storage import *
 
 
-from pydantic import BaseModel
+# from pydantic import BaseModel
 
-from user_definition import *
+# from user_definition import *
 
 
 app = FastAPI(
@@ -28,70 +27,98 @@ app = FastAPI(
     version="1.0.0",
 )
 
+WIKI_URL = ("https://en.wikipedia.org/wiki/"
+            "List_of_music_festivals_in_the_United_States")
+PROCESSED_PATH = "processed/festival_weather.parquet"
+
+
 @app.post("/collect/raw_epa")
 def collect_raw_epa():
-   epa = collect_stations()
 
-   ## upload to gcs raw
-   return {"source": "success"}
+   try:
+      return collect_epa()
+   except Exception as e:
+      raise HTTPException(status_code=502,
+                          detail=f"EPA collection failed: {e}")
+
 
 
 @app.post("/collect/raw_noaa")
 def collect_noaa():
-   noaa = collect_stations()
+   try:
+      return collect_stations()
+   except Exception as e:
+      raise HTTPException(status_code=502,
+                          detail=f"NOAA collection failed: {e}")
 
-   ## upload to gcs raw
-   
-   return {"source": "success"}
-    
 
 
 @app.post("/collect/raw_festivals")
 def collect_festivals():
    """Wikipedia: scrape the U.S. music festival list and store it in raw/festivals/."""
-   wiki_scrape = get_scraped_festivals("https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States")
+   try:
+      wiki_scrape = get_scraped_festivals(WIKI_URL)
+   except Exception as e:
+      raise HTTPException(status_code=502,
+                          detail=f"Wikipedia scrape failed: {e}")
 
    ## upload to gcs raw
-   return {"source": "success"}
+   return {"source": "wiki", "festivals": len(wiki_scrape)}
 
+def latest_blobs(source):
+   # See what blobs were added recently
+   paths = [p for p in list_blobs(f"raw/{source}/") if len(p.split("/"))== 4 and p.split("/")[3]]
+
+   if not paths:
+      return []
+   newest = max(p.split("/")[2] for p in paths)
+   return [p for p in paths if p.split("/")[2] == newest]
 
 
 # On first start of the app -- the transform and storage functions are run so that all of the data is reloaded
 
 @app.post("/extract_and_save")
 def extract_and_save():
+    """Read the latest raw files, clean and join them, write the processed table.
    """
-    Use 
+    noaa_paths = latest_blobs("noaa")
+    epa_paths = latest_blobs("epa")
+    wiki_paths = latest_blobs("wiki")
 
-    TODO:
-    1. Split search_input.company_dict into two groups: the "Anthropic"
-       entry (if present) and everything else.
-    2. For EPA, the code should go to the corresponding value of
-       `festival`, .
-       Extract the information including title, and URL,
-       and call qualification_parser to get qualification.
-       (optional) To improve performance you can try the asynchronous version.
-    3. Build up a single festival_data_response dict incrementally: start it
-       empty, add Wikipedia results first (if any), then call
-       noa for the noaa data, then call epa_collector for the epa data.
-   5. Save the combined data to GCS the same way HW3 did.
-   """
-   print("PRINT PRINT PRINT !!!!")
+    missing = [name for name, paths in
+               [("noaa", noaa_paths), ("epa", epa_paths), ("wiki", wiki_paths)]
+               if not paths]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No raw data found for: {', '.join(missing)}. "
+                   f"Run the collect routes first.",
+        )
 
-   ## retrieve from bucket latest data 
+    noaa_records = []
+    for path in noaa_paths:
+        noaa_records.extend(json.loads(read_blob(path)))
 
-   ## transform the necessary data 
+    epa_zips = [read_blob(p) for p in epa_paths if p.endswith(".zip")]
 
-   ### put the cleaned data together into one json/object etc
+    festival_records = []
+    for path in wiki_paths:
+        festival_records.extend(json.loads(read_blob(path)))
 
+    noaa_df = clean_noaa(noaa_records)
+    epa_df = clean_epa(epa_zips)
+    festivals_df = clean_wiki(festival_records)
 
+    final_df = join_data(noaa_df, epa_df, festivals_df)
 
-   combined_element = []
-    
-   ### call storage / store this combined document
+    write_blob(PROCESSED_PATH, final_df.to_parquet(),
+               content_type="application/octet-stream")
 
-
-   pass
-
-
-
+    return {
+        "status": "ok",
+        "path": PROCESSED_PATH,
+        "rows": len(final_df),
+        "festivals": int(final_df["festival_id"].nunique()),
+        "date_range": [str(final_df["date"].min().date()),
+                       str(final_df["date"].max().date())],
+    }

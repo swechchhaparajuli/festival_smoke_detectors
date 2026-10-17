@@ -1,7 +1,7 @@
 import pandas as pd
 import io
-
-from storage import read_blob, list_blobs, write_blob
+import re
+from datetime import date
 
 
 START_DATE = '1999-01-01'
@@ -16,6 +16,119 @@ EPA_COLUMNS = {
     "State Name": "state_name",
     "County Name": "county_name",
 }
+
+WIKI_COLIMNS = {
+    "name":"festival name",
+    "longitude": "longitude",
+    "latitude": "latitude",
+    "city_name": "City name | can be empty",
+    "fips": "FIPS -- join key",
+    "venue": "Venue name | Empty",
+    "year_founded": "Year | Empty",
+    "genre": "Genre | Empty",
+    "status": "Active or Not",
+    "frequency": "When it happens",
+    "years_active": "[List of years calculated] | Empty"
+}
+
+FIPS_TO_STATION = {
+    "01003": ("USC00012172", 37.3),
+    "06065": ("USC00044259", 3.8),
+    "06111": ("USC00046399", 1.8),
+    "12109": ("USC00087826", 1.5),
+    "12055": ("USC00080236", 12.5),
+    "13059": ("USW00013873", 5.2),
+    "13121": ("USW00053819", 28.2),
+    "19153": ("USW00014933", 6.9),
+    "20149": ("USC00148259", 1.7),
+    "21157": ("USC00155694", 23.0),
+    "22071": ("USW00012930", 6.1),
+    "24031": ("USC00186350", 7.9),
+    "26127": ("USC00205567", 9.5),
+    "26091": ("USC00200032", 25.0),
+    "27123": ("USC00218450", 4.7),
+    "47157": ("USW00013893", 11.6),
+    "47037": ("USW00013897", 9.6),
+    "55063": ("USW00014920", 7.1),
+}
+
+MAX_STATION_KM = 25
+
+# Matches: "1999" | "2001–2019" | "2011–19" | "2022–" | "1988 to present" | "2013- current"
+# AI for REGEXP
+YEAR_RANGE = re.compile(
+    r"(\d{4})(\s*(?:–|—|-|to)\s*(\d{4}|\d{2}(?!\d)|present|current|now)?)?"
+)
+
+CURRENT_YEAR = date.today().year
+
+def parse_years_active(text):
+    if not text:
+        return []
+    text = str(text).lower()
+
+
+    cancelled = set()
+    if "cancel" in text:
+        text, _, tail = text.partition("cancel")
+        cancelled = {int(y) for y in re.findall(r"\d{4}", tail)}
+
+    years = set()
+    for start, dash, end in YEAR_RANGE.findall(text):
+        start = int(start)
+        if not dash:
+            end = start
+        elif not end or not end.isdigit():
+            end = CURRENT_YEAR
+        elif len(end) == 2:
+            end = start // 100 * 100 + int(end)
+        else:
+            end = int(end)
+        years.update(range(start, min(end, CURRENT_YEAR) + 1))
+
+    return sorted(years - cancelled)
+
+
+def clean_wiki(records):
+    """
+    Cleans Wiki data -- adds proper years active in list format if possible or leaves empty
+    Removes if FIPS not in data
+    """
+    cleaned = []
+    for r in records:
+        fips = r.get("fips")
+        if not fips:
+            continue
+        fips = str(fips).zfill(5)
+        if fips not in FIPS_TO_STATION:
+            continue
+        station_id, distance_km = FIPS_TO_STATION[fips]
+
+        years = parse_years_active(r.get("years_active"))
+        founded = r.get("year_founded")
+        name = r.get("Name") or r.get("name")
+
+        cleaned.append({
+            "name": name,
+            "longitude": r.get("longitude"),
+            "latitude": r.get("latitude"),
+            "city_name": r.get("city_name"),
+            "fips": fips,
+            "venue": r.get("venue"),
+            "year_founded": int(founded) if founded and str(founded).isdigit()
+                            else (years[0] if years else None),
+            "genre": r.get("genre"),
+            "status": r.get("is_active:"),
+            "frequency": r.get("frequency"),
+            "years_active": years or None,
+            "festival_id": re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_"),
+            "station_id": station_id,
+            "station_distance_km": distance_km,
+            "station_far": distance_km > MAX_STATION_KM,
+        })
+
+    return pd.DataFrame(cleaned)
+
 
 def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
     """
@@ -58,7 +171,7 @@ def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
 
     return final_df
 
-def clean_epa():
+def clean_epa(zip_files, start_date=START_DATE, end_date=END_DATE):
     """"
     Cleans epa zip files pulled using epa.py.
 
@@ -89,6 +202,11 @@ def clean_epa():
 
         df["date"] = pd.to_datetime(df["date"])
 
+        # Only keeep the counties we have festivals in
+        df = df[df["county_fips"].isin(FIPS_TO_STATION)]
+        if df.empty:
+            continue
+
         # Average across every monitor for that day
         daily = (
             df.groupby(["county_fips", "date"], as_index=False)
@@ -108,7 +226,7 @@ def clean_epa():
 
 def join_data(noaa, epa, festivals):
     # Join all cleaned data together into one dataframe
-    data_df = festivals.merge(noaa, on=["station_id", "date"], how="left")
+    data_df = festivals.merge(noaa, on="station_id", how="left")
     data_df = data_df.merge(epa, left_on=["fips", "date"],
                         right_on=["county_fips", "date"], how="left")
 
