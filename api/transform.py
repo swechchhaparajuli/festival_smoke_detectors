@@ -1,7 +1,7 @@
 import pandas as pd
 import io
-
-from storage import read_blob, list_blobs, write_blob
+import re
+from datetime import date
 
 
 START_DATE = '1999-01-01'
@@ -15,6 +15,20 @@ EPA_COLUMNS = {
     "Arithmetic Mean": "pm25",
     "State Name": "state_name",
     "County Name": "county_name",
+}
+
+WIKI_COLIMNS = {
+    "name":"festival name",
+    "longitude": "longitude",
+    "latitude": "latitude",
+    "city_name": "City name | can be empty",
+    "fips": "FIPS -- join key",
+    "venue": "Venue name | Empty",
+    "year_founded": "Year | Empty",
+    "genre": "Genre | Empty",
+    "status": "Active or Not",
+    "frequency": "When it happens",
+    "years_active": "[List of years calculated] | Empty"
 }
 
 FIPS_TO_STATION = {
@@ -37,6 +51,16 @@ FIPS_TO_STATION = {
     "47037": ("USW00013897", 9.6),
     "55063": ("USW00014920", 7.1),
 }
+
+MAX_STATION_KM = 25
+
+# Matches: "1999" | "2001–2019" | "2011–19" | "2022–" | "1988 to present" | "2013- current"
+# AI for REGEXP
+YEAR_RANGE = re.compile(
+    r"(\d{4})(\s*(?:–|—|-|to)\s*(\d{4}|\d{2}(?!\d)|present|current|now)?)?"
+)
+
+CURRENT_YEAR = date.today().year
 
 def parse_years_active(text):
     if not text:
@@ -75,7 +99,7 @@ def clean_wiki(records):
         fips = r.get("fips")
         if not fips:
             continue
-
+        fips = str(fips).zfill(5)
         if fips not in FIPS_TO_STATION:
             continue
         station_id, distance_km = FIPS_TO_STATION[fips]
@@ -89,7 +113,7 @@ def clean_wiki(records):
             "longitude": r.get("longitude"),
             "latitude": r.get("latitude"),
             "city_name": r.get("city_name"),
-            "fips": fips.zfill(5),
+            "fips": fips,
             "venue": r.get("venue"),
             "year_founded": int(founded) if founded and str(founded).isdigit()
                             else (years[0] if years else None),
@@ -97,6 +121,10 @@ def clean_wiki(records):
             "status": r.get("is_active:"),
             "frequency": r.get("frequency"),
             "years_active": years or None,
+            "festival_id": re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_"),
+            "station_id": station_id,
+            "station_distance_km": distance_km,
+            "station_far": distance_km > MAX_STATION_KM,
         })
 
     return pd.DataFrame(cleaned)
