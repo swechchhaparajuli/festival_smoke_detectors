@@ -54,6 +54,16 @@ def collect_festivals():
    ## upload to gcs raw
    return {"source": "success"}
 
+def latest_blobs(bucket, source):
+   blobs = []
+   for b in bucket.list_blobs(prefix=f"raw/{source}/"):
+      parts = b.name.split("/")
+      if len(parts) == 4 and parts[3]:
+            blobs.append(b)
+      if not blobs:
+            return []
+      date = max(b.name.split("/")[2] for b in blobs)
+      return [b for b in blobs if b.name.split("/")[2] == date]
 
 
 # On first start of the app -- the transform and storage functions are run so that all of the data is reloaded
@@ -79,8 +89,24 @@ def extract_and_save():
    print("PRINT PRINT PRINT !!!!")
 
    ## retrieve from bucket latest data 
+   credentials = service_account.Credentials.from_service_account_file(
+              service_account_key)
+   client = storage.Client(project=project_id,
+                                  credentials=credentials)
+   bucket = client.bucket(bucket_name)
+
+   blobs = latest_blobs(bucket, "epa")
+   
+   latest_raw_epa = latest_blobs(bucket, "epa")
+   latest_raw_noaa = latest_blobs(bucket, "noaa")
+   latest_raw_wiki = latest_blobs(bucket, "wiki")
 
    ## transform the necessary data 
+
+   
+
+
+
 
    ### put the cleaned data together into one json/object etc
 
