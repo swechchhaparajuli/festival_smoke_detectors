@@ -1,5 +1,5 @@
 import json
-import datetime
+from datetime import date
 import re
 
 from fastapi import FastAPI, HTTPException
@@ -22,7 +22,39 @@ from pydantic import BaseModel
 from user_definition import *
 
 
-app = FastAPI()
+app = FastAPI(
+    title="Festival Smoke Detectors API",
+    description="Collects raw festival (Wikipedia), heat (NOAA) and smoke (EPA) data into the team GCS bucket.",
+    version="1.0.0",
+)
+
+@app.post("/collect/raw_epa")
+def collect_raw_epa():
+   epa = collect_stations()
+
+   ## upload to gcs raw
+   return {"source": "success"}
+
+
+@app.post("/collect/raw_noaa")
+def collect_noaa():
+   noaa = collect_stations()
+
+   ## upload to gcs raw
+   
+   return {"source": "success"}
+    
+
+
+@app.post("/collect/raw_festivals")
+def collect_festivals():
+   """Wikipedia: scrape the U.S. music festival list and store it in raw/festivals/."""
+   wiki_scrape = get_scraped_festivals("https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States")
+
+   ## upload to gcs raw
+   return {"source": "success"}
+
+
 
 # On first start of the app -- the transform and storage functions are run so that all of the data is reloaded
 
@@ -45,20 +77,18 @@ def extract_and_save():
    5. Save the combined data to GCS the same way HW3 did.
    """
    print("PRINT PRINT PRINT !!!!")
-   ### call transform for all types 
-   load2 = collect_stations()
-   print(load2)
-   print("NOAA COMPLETE")
-   load = get_scraped_festivals("https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States")
-   print(load)
-   print("WIKIPEDIA")
+
+   ## retrieve from bucket latest data 
+
+   ## transform the necessary data 
+
+   ### put the cleaned data together into one json/object etc
 
 
-   
 
-    ### put the cleaned data together into one json/object etc
+   combined_element = []
     
-    ### call storage / store this combined document
+   ### call storage / store this combined document
 
 
    pass
