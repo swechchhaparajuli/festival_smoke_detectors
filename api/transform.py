@@ -228,10 +228,23 @@ def clean_epa():
         ["county_fips", "date", "pm25", "state_name", "county_name"]
     ]
 
-def join_data(noaa, epa, festivals):
+def join_data(noaa, epa, festivals, active_years_only=True):
     # Join all cleaned data together into one dataframe
-    data_df = festivals.merge(noaa, on=["station_id", "date"], how="left")
-    data_df = data_df.merge(epa, left_on=["fips", "date"],
-                        right_on=["county_fips", "date"], how="left")
+    data_df = festivals.merge(noaa, on="station_id", how="left")
+
+    data_df = data_df.merge(
+        epa[["county_fips", "date", "pm25"]],
+        left_on=["fips", "date"],
+        right_on=["county_fips", "date"],
+        how="left",
+    ).drop(columns=["county_fips"])
+
+    if active_years_only and "years_active" in data_df.columns:
+        year = data_df["date"].dt.year
+        keep = [
+            ys is None or (isinstance(ys, list) and y in ys)
+            for ys, y in zip(data_df["years_active"], year)
+        ]
+        data_df = data_df[keep].reset_index(drop=True)
 
     return data_df
