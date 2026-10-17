@@ -83,8 +83,9 @@ def extract_and_save():
    ## transform the necessary data 
 
    ### put the cleaned data together into one json/object etc
+   noaa_records = collect_stations()
 
-
+   print(join_data(clean_noaa(noaa_records), clean_epa(), clean_wiki(get_scraped_festivals("https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States"))))
 
    combined_element = []
     
