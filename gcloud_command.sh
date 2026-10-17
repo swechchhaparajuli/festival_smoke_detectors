@@ -33,7 +33,7 @@ WEB_PORT=8501                           # Streamlit default
 
 # The key goes to Secret Manager and is mounted at runtime, and .env is read by gcloud at deploy time.
 ENV_FILE=".env"
-LOCAL_KEY_FILE="/Users/dongz/festival-smoke-detector-f7ecab7a945b.json"
+LOCAL_KEY_FILE="${LOCAL_KEY_FILE:-/tmp/gcp-key.json}"
 
 # The code reads GCP_SERVICE_ACCOUNT_KEY as a file path and mount it
 GCP_KEY_SECRET="group-hw3-gcp-key"
@@ -177,7 +177,7 @@ deploy_scheduler() {
 
   for source in epa noaa festivals; do
     SCHEDULER_JOB="collect-${source}"
-    COLLECT_PATH="/collect/${source}"
+    COLLECT_PATH="/collect/raw_${source}"
 
     action=create
     header_flag="--headers"
