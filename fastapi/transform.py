@@ -1,6 +1,9 @@
 import pandas as pd
 import io
 
+from storage import read_blob, list_blobs, write_blob
+
+
 START_DATE = '1999-01-01'
 END_DATE = '2025-12-31'
 
@@ -102,3 +105,12 @@ def clean_epa():
     return epa_df.reset_index(drop=True)[
         ["county_fips", "date", "pm25", "state_name", "county_name"]
     ]
+
+def join_data(noaa, epa, festivals):
+    # Join all cleaned data together into one dataframe
+    data_df = festivals.merge(noaa, on=["station_id", "date"], how="left")
+    data_df = data_df.merge(epa, left_on=["fips", "date"],
+                        right_on=["county_fips", "date"], how="left")
+
+    return data_df
+
