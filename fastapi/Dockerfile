@@ -5,7 +5,7 @@ FROM python:3.13-slim
 WORKDIR /streamlit
 
 # Copy everything in the working directory to /Day8 in the container
-COPY * .
+COPY . .
 
 # Install packages and libraries
 RUN pip install -r requirements.txt
