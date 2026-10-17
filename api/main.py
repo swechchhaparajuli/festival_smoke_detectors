@@ -83,7 +83,22 @@ def extract_and_save():
    ## transform the necessary data 
 
    ### put the cleaned data together into one json/object etc
-   noaa_records = collect_stations()
+   noaa_paths = [
+       path for path in list_blobs("raw/noaa/")
+       if path.endswith(".json")
+   ]
+
+   latest_by_station = {}
+   for path in sorted(noaa_paths):
+       filename = path.rsplit("/", 1)[-1]
+       latest_by_station[filename] = path
+
+   noaa_records = []
+   for path in latest_by_station.values():
+       noaa_records.extend(json.loads(read_blob(path)))
+
+   if not noaa_records:
+       raise HTTPException(status_code=503, detail="No raw NOAA records found in GCS")
 
    print(join_data(clean_noaa(noaa_records), clean_epa(), clean_wiki(get_scraped_festivals("https://en.wikipedia.org/wiki/List_of_music_festivals_in_the_United_States"))))
 
