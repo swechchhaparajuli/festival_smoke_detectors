@@ -46,7 +46,7 @@ Note: If we need a key, say which environment variable holds it and make sure th
 - Google Cloud CLI (`gcloud`).
 - A Google account with access to the team project and permission to upload objects to the bucket.
 
-Project ID: `festival-smoke-detector`  
+Project ID: `festival-smoke-detector`
 Bucket name: `festival_smoke_detector`
 
 The application uses Application Default Credentials (ADC). A service account JSON key is not required for local development.
@@ -101,8 +101,8 @@ Use the account that has been granted access to the team project and bucket. The
 Run from the `fastapi/` folder:
 
 ```bash
-cd fastapi
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+cd api
+python fastapi dev main.py
 ```
 
 Open http://127.0.0.1:8000/docs to view and test the endpoints. Check http://127.0.0.1:8000/health first: it should show the project ID and bucket name from your `.env`.
@@ -129,12 +129,6 @@ curl -X POST http://127.0.0.1:8000/collect/epa \
   -d '{"start_year": 2020, "end_year": 2025}'
 ```
 
-### 7. Run the tests (no internet or GCP needed)
-
-```bash
-cd fastapi
-python -m pytest -q
-```
 
 ### Adding or changing a collector
 Only edit your own file in `fastapi/collectors/`. `main.py` already has a route for each source that calls:
@@ -158,8 +152,8 @@ Keep those function names, save files with `write_blob(path, data)` from `storag
 ├────── noaa_collector.py
 ├────── epa_collector.py
 ├────── wikipedia_scraper.py
-├──── transform.py 
-├──── storage.py 
+├──── transform.py
+├──── storage.py
 ├── streamlit/
 ├──── DOCKERFILE
 ├──── compose.yml ##this is so we can build/run containers to test by just one command idt if we've gone over it in class
