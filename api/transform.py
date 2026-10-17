@@ -1,5 +1,8 @@
 import pandas as pd
 import io
+import re
+from datetime import date
+
 
 from storage import read_blob, list_blobs, write_blob
 
@@ -16,6 +19,92 @@ EPA_COLUMNS = {
     "State Name": "state_name",
     "County Name": "county_name",
 }
+
+WIKI_COLIMNS = {
+    "name":"festival name",
+    "longitude": "longitude", 
+    "latitude": "latitude", 
+    "city_name": "City name | can be empty",
+    "fips": "FIPS -- join key",
+    "venue": "Venue name | Empty",
+    "year_founded": "Year | Empty",
+    "genre": "Genre | Empty",
+    "status": "Active or Not",
+    "frequency": "When it happens",
+    "years_active": "[List of years calculated] | Empty"
+}
+
+def clean_status():
+    pass
+
+# Matches: "1999" | "2001–2019" | "2011–19" | "2022–" | "1988 to present" | "2013- current"
+# AI for REGEXP
+YEAR_RANGE = re.compile(
+    r"(\d{4})(\s*(?:–|—|-|to)\s*(\d{4}|\d{2}(?!\d)|present|current|now)?)?"
+)
+
+CURRENT_YEAR = date.today().year
+
+def parse_years_active(text):
+    if not text:
+        return []
+    text = str(text).lower()
+
+
+    cancelled = set()
+    if "cancel" in text:
+        text, _, tail = text.partition("cancel")
+        cancelled = {int(y) for y in re.findall(r"\d{4}", tail)}
+ 
+    years = set()
+    for start, dash, end in YEAR_RANGE.findall(text):
+        start = int(start)
+        if not dash:
+            end = start
+        elif not end or not end.isdigit():
+            end = CURRENT_YEAR
+        elif len(end) == 2:
+            end = start // 100 * 100 + int(end)
+        else:
+            end = int(end)
+        years.update(range(start, min(end, CURRENT_YEAR) + 1))
+ 
+    return sorted(years - cancelled)
+
+
+def clean_wiki(records):
+    """
+    Cleans Wiki data -- adds proper years active in list format if possible or leaves empty
+    Removes if FIPS not in data
+    """
+    cleaned = []
+    for r in records:
+        fips = r.get("fips")
+        if not fips:
+            continue
+ 
+        years = parse_years_active(r.get("years_active"))
+        founded = r.get("year_founded")
+ 
+        cleaned.append({
+            "name":r.get("Name"),
+            "longitude": r.get("longitude"),
+            "latitude": r.get("latitude"),
+            "city_name": r.get("city_name"),
+            "fips": fips.zfill(5),
+            "venue": r.get("venue"),
+            "year_founded": int(founded) if founded and founded.isdigit()
+                            else (years[0] if years else None),
+            "genre": r.get("genre"),
+            "status": r.get("is_active:"),
+            "frequency": r.get("frequency"),
+            "years_active": years or None,
+        })
+
+    return cleaned
+
+
+
 
 def clean_noaa(records, start_date=START_DATE, end_date=END_DATE):
     """
