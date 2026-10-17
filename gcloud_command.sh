@@ -41,6 +41,7 @@ SECRET_MOUNT_PATH="/run/secrets/gcp_key"
 
 SCHEDULER_JOB="collect-data"
 SCHEDULE="0 0 * * *"
+TRANSFORM_SCHEDULE="0 2 * * *"
 SCHEDULER_TZ="America/Los_Angeles"
 COLLECT_PATH="/collect"
 MESSAGE_BODY='{}'
@@ -111,7 +112,6 @@ deploy_api() {
   cp "$API_DIR/"*.py "$build_dir/"
   cp "$API_DIR/requirements.txt" "$API_DIR/Dockerfile" "$build_dir/"
   cp -R "$API_DIR/collectors" "$build_dir/"
-  cp user_definition.py "$build_dir/"
   log "Deploying ${API_SERVICE} from ${API_DIR} (Cloud Build builds the image)"
   gcloud run deploy "$API_SERVICE" \
     --source "$build_dir" \
@@ -173,11 +173,18 @@ deploy_scheduler() {
   url="$(api_url)"
 
   local source action header_flag
-  local SCHEDULER_JOB COLLECT_PATH
+  local SCHEDULER_JOB COLLECT_PATH job_schedule
 
-  for source in epa noaa festivals; do
-    SCHEDULER_JOB="collect-${source}"
-    COLLECT_PATH="/collect/raw_${source}"
+  for source in epa noaa festivals transform; do
+    if [ "$source" = "transform" ]; then
+      SCHEDULER_JOB="extract-and-save"
+      COLLECT_PATH="/extract_and_save"
+      job_schedule="$TRANSFORM_SCHEDULE"
+    else
+      SCHEDULER_JOB="collect-${source}"
+      COLLECT_PATH="/collect/raw_${source}"
+      job_schedule="$SCHEDULE"
+    fi
 
     action=create
     header_flag="--headers"
@@ -190,7 +197,7 @@ deploy_scheduler() {
 
     gcloud scheduler jobs "$action" http "$SCHEDULER_JOB" \
       --location="$REGION" \
-      --schedule="$SCHEDULE" \
+      --schedule="$job_schedule" \
       --time-zone="$SCHEDULER_TZ" \
       --uri="${url}${COLLECT_PATH}" \
       --http-method=POST \
