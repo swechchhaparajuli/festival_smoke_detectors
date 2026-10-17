@@ -10,7 +10,10 @@ from storage import write_blob
 header = {"User-Agent": "USF-course-project (enlukow@usfca.edu)"}
 url = "https://www.ncei.noaa.gov/access/services/data/v1"
 
-STATIONS = ["USW00023234"] # update after Swechchha determines what stations we need
+STATIONS = ["USC00012172", "USC00044259", "USC00046399", "USC00087826", "USC00080236"
+            "USW00013873", "USW00053819", "USW00014933", "USC00148259", "USC00155694",
+            "USW00012930", "USC00186350", "USC00205567", "USC00200032", "USC00218450",
+            "USW00013893", "USW00013897", "USW00014920"]
 START_DATE = "1999-01-01"
 END_DATE = "2025-12-31"
 
@@ -76,18 +79,17 @@ def collect_stations(fetch_date=None):
         # If failure, record failure and skip station
         except Exception as e:
             print(f"{station_id}: FAILED - {e}")
-            failed.append({"station": station_id, "error": {e}})
+            failed.append({"station": station_id, "error": str(e)})
             continue
 
         # Upload to GCS
         gcs_path = f"raw/noaa/{fetch_date}/{station_id}.json"
-        response = write_blob(gcs_path, json.dumps(records))
+        write_blob(gcs_path, json.dumps(records))
 
         # Record success
         successful.append(
             {"station": station_id, "path": gcs_path, "records": len(records)}
         )
-        print(f"write to blob response noaa: {response}")
 
     return {"successful": successful, "failed": failed}
 

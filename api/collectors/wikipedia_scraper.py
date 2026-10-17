@@ -129,5 +129,5 @@ def get_scraped_festivals(url):
     # Upload to GCS
     gcs_path = f"raw/wiki/{date.today()}/festival_details.json"
     response = write_blob(gcs_path, json.dumps(festival_details))
-    print(f"write to blob response: {response}")
-    return response
+    # print(f"write to blob response: {response}")
+    return festival_details
