@@ -121,6 +121,8 @@ deploy_api() {
     --allow-unauthenticated \
     --timeout=300 \
     --max-instances=1 \
+    --memory=2Gi \
+    --concurrency=1 \
     --env-vars-file="$ENV_FILE" \
     --set-secrets="$SECRET_MOUNT_PATH=$GCP_KEY_SECRET:latest"
 
